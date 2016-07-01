@@ -44,13 +44,13 @@ import java.util.UUID;
  *
  * @author T.Ishii
  */
-public class SerialComActivity extends AppCompatActivity implements OnClickListener {
+public class DeviceControlActivity extends AppCompatActivity implements OnClickListener {
     public static String UUID_BLESERIAL_SERVICE =   "bd011f22-7d3c-0db6-e441-55873d44ef40";
     public static String UUID_BLESERIAL_RX =   "2a750d7d-bd9a-928f-b744-7d5a70cef1f9";
     public static String UUID_BLESERIAL_TX =   "0503b819-c75b-ba9b-3641-6a7f338dd9bd";
 
 
-    private final static String TAG = "SerialComActivity";
+    private final static String TAG = "DeviceControlActivity";
     public static final String EXTRAS_DEVICE_NAME = "DEVICE_NAME";
     public static final String EXTRAS_DEVICE_ADDRESS = "DEVICE_ADDRESS";
     private String mDeviceName;

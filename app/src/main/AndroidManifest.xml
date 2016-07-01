@@ -21,7 +21,7 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-        <activity android:name=".SerialComActivity"/>
+        <activity android:name=".DeviceControlActivity"/>
 
     </application>
 
