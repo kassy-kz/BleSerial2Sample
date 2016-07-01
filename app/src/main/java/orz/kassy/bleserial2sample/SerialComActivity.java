@@ -1,10 +1,13 @@
 package orz.kassy.bleserial2sample;
 
 import android.app.Activity;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCallback;
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattService;
+import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothProfile;
 import android.bluetooth.le.BluetoothLeScanner;
 import android.content.BroadcastReceiver;
@@ -23,6 +26,7 @@ import android.view.View.OnClickListener;
 import android.widget.Button;
 import android.widget.TextView;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -41,17 +45,27 @@ import java.util.UUID;
  * @author T.Ishii
  */
 public class SerialComActivity extends AppCompatActivity implements OnClickListener {
+    public static String UUID_BLESERIAL_SERVICE =   "bd011f22-7d3c-0db6-e441-55873d44ef40";
+    public static String UUID_BLESERIAL_RX =   "2a750d7d-bd9a-928f-b744-7d5a70cef1f9";
+    public static String UUID_BLESERIAL_TX =   "0503b819-c75b-ba9b-3641-6a7f338dd9bd";
+
+
     private final static String TAG = "SerialComActivity";
     public static final String EXTRAS_DEVICE_NAME = "DEVICE_NAME";
     public static final String EXTRAS_DEVICE_ADDRESS = "DEVICE_ADDRESS";
     private String mDeviceName;
     private String mDeviceAddress;
-    private BluetoothLeService mBluetoothLeService;
     private Button ledOnButton;
     private Button ledOffButton;
     private TextView resDataText;
     private boolean mFlag = false;
     private boolean bool = false;
+
+    private BluetoothAdapter mBluetoothAdapter;
+    private ArrayList<String> mBluetoothDeviceAddressList;
+    private ArrayList<BluetoothGatt> mBluetoothGattList;
+    private BluetoothGattCallback mCallback;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -62,10 +76,6 @@ public class SerialComActivity extends AppCompatActivity implements OnClickListe
         final Intent intent = getIntent();
         mDeviceName = intent.getStringExtra(EXTRAS_DEVICE_NAME);
         mDeviceAddress = intent.getStringExtra(EXTRAS_DEVICE_ADDRESS);
-
-        //　サービス接続（BluetoothLeService）
-        Intent gattServiceIntent = new Intent(this, BluetoothLeService.class);
-        bindService(gattServiceIntent, mServiceConnection, BIND_AUTO_CREATE);
 
         //ボタン
         ledOnButton = (Button) findViewById(R.id.led_on_button);
@@ -85,14 +95,20 @@ public class SerialComActivity extends AppCompatActivity implements OnClickListe
     @Override
     protected void onResume() {
         super.onResume();
+
+        if (!initialize(mGattCallback)) {
+            Log.e(TAG, "Unable to initialize Bluetooth");
+            finish();
+        }
+        // BTアダプタへの参照の初期化が成功したら、接続動作を開始
+        connect(mDeviceAddress);
+
 //        final boolean result = mBluetoothLeService.connect(mDeviceAddress);
     }
 
     @Override
     protected void onPause() {
-        unbindService(mServiceConnection);
-        mBluetoothLeService.disconnect();
-        mBluetoothLeService = null;
+        disconnect();
         super.onPause();
         finish();
     }
@@ -110,33 +126,7 @@ public class SerialComActivity extends AppCompatActivity implements OnClickListe
         return super.onOptionsItemSelected(item);
     }
 
-    //　サービスコネクション（BluetoothLeService間）
-    private final ServiceConnection mServiceConnection = new ServiceConnection() {
 
-        @Override
-        public void onServiceConnected(ComponentName componentName, IBinder service) {
-            Log.e(TAG, "service connected *********************************");
-            mBluetoothLeService = ((BluetoothLeService.LocalBinder) service).getService();
-            if (!mBluetoothLeService.initialize(mGattCallback)) {
-                Log.e(TAG, "Unable to initialize Bluetooth");
-                finish();
-            }
-            // BTアダプタへの参照の初期化が成功したら、接続動作を開始
-            mBluetoothLeService.connect(mDeviceAddress);
-            Log.e(TAG, "bluetoothleservice connect");
-        }
-
-        @Override
-        public void onServiceDisconnected(ComponentName componentName) {
-            Log.e(TAG, "service disconnected *********************************");
-            mBluetoothLeService.disconnect();
-            mBluetoothLeService = null;
-        }
-    };
-
-    ///////////////////////////////////////////////
-    //	byteを符号無しintへ変換
-    ////////////////////////////////////////////////
     private static int convByteToInt(byte b) {
         int i = (int) b;
         i &= 0x000000FF;
@@ -148,13 +138,13 @@ public class SerialComActivity extends AppCompatActivity implements OnClickListe
         switch (view.getId()) {
             case R.id.btnConnect:
                 Log.i(TAG, "connect **************************************");
-                mBluetoothLeService.connect(mDeviceAddress);
+                connect(mDeviceAddress);
 
                 break;
 
             case R.id.btnDisconnect:
                 Log.i(TAG, "disconnect **************************************");
-                mBluetoothLeService.disconnect();
+                disconnect();
 
                 break;
 
@@ -171,8 +161,8 @@ public class SerialComActivity extends AppCompatActivity implements OnClickListe
                         bool = true;
                     }
 
-                    BluetoothGattService gattService = mGatt.getService(UUID.fromString(BluetoothLeService.UUID_BLESERIAL_SERVICE));
-                    BluetoothGattCharacteristic targetCharacteristic = gattService.getCharacteristic(UUID.fromString(BluetoothLeService.UUID_BLESERIAL_TX));
+                    BluetoothGattService gattService = mGatt.getService(UUID.fromString(UUID_BLESERIAL_SERVICE));
+                    BluetoothGattCharacteristic targetCharacteristic = gattService.getCharacteristic(UUID.fromString(UUID_BLESERIAL_TX));
 
                     if (targetCharacteristic != null) {
                         targetCharacteristic.setValue(data);
@@ -218,8 +208,8 @@ public class SerialComActivity extends AppCompatActivity implements OnClickListe
             try {
                 if (status == BluetoothGatt.GATT_SUCCESS) {
                     //RXにNotificateをセット
-                    BluetoothGattService myService = gatt.getService(UUID.fromString(BluetoothLeService.UUID_BLESERIAL_SERVICE));
-                    BluetoothGattCharacteristic characteristic = myService.getCharacteristic(UUID.fromString(BluetoothLeService.UUID_BLESERIAL_RX));
+                    BluetoothGattService myService = gatt.getService(UUID.fromString(UUID_BLESERIAL_SERVICE));
+                    BluetoothGattCharacteristic characteristic = myService.getCharacteristic(UUID.fromString(UUID_BLESERIAL_RX));
                     gatt.setCharacteristicNotification(characteristic, true);
                 } else {
                     Log.w(TAG, "onServicesDiscovered received: " + status);
@@ -244,16 +234,93 @@ public class SerialComActivity extends AppCompatActivity implements OnClickListe
         @Override
         public void onCharacteristicChanged(BluetoothGatt gatt,
                                             BluetoothGattCharacteristic characteristic) {
-            if (UUID.fromString(BluetoothLeService.UUID_BLESERIAL_RX).equals(characteristic.getUuid())) {
+            if (UUID.fromString(UUID_BLESERIAL_RX).equals(characteristic.getUuid())) {
                 final byte[] data = characteristic.getValue();
                 Log.i(TAG, "change data * " + data[0]);
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
+                        Log.i(TAG, "change value" + data[0]);
                         resDataText.setText("value : " + data[0]);
                     }
                 });
             }
         }
     };
+
+
+    /**
+     * BluetoothAdapter 初期化.
+     * @return true：初期化成功
+     */
+    public boolean initialize(BluetoothGattCallback callback) {
+
+        mBluetoothGattList = new ArrayList<BluetoothGatt>();
+        mBluetoothDeviceAddressList = new ArrayList<String>();
+
+        mCallback = callback;
+
+        BluetoothManager bluetoothManager = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
+        if (bluetoothManager == null) {
+            Log.e(TAG, "Unable to initialize BluetoothManager.");
+            return false;
+        }
+
+        mBluetoothAdapter = bluetoothManager.getAdapter();
+        if (mBluetoothAdapter == null) {
+            Log.e(TAG, "Unable to obtain a BluetoothAdapter.");
+            return false;
+        }
+        return true;
+    }
+
+
+    /**
+     * GATT server（BLESerial） と接続
+     * 結果は非同期で、BluetoothGattCallback（冒頭部分）で報告される。
+     * @param address ：Device Address
+     * @return true：接続成功
+     */
+    public boolean connect(final String address) {
+        Log.e(TAG, "connect method called ********************************************");
+
+        // 前回接続したデバイスだった場合は再接続
+//        if (mBluetoothDeviceAddress != null && address.equals(mBluetoothDeviceAddress) && mBluetoothGatt != null) {
+//            Log.d(TAG, "Trying to use an existing mBluetoothGatt for connection.");
+//            if (mBluetoothGatt.connect()) {
+//                return true;
+//            } else {
+//                return false;
+//            }
+//        }
+
+        // 接続
+        final BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(address);
+        if (device == null) {
+            Log.e(TAG, "Device not found.  Unable to connect.");
+            return false;
+        }
+
+        // デバイスと直接通信するので、autoConnectパラメータ（２個目の引数）はfalse
+        Log.i(TAG, "Trying to create a new connection.");
+        mBluetoothGattList.add(device.connectGatt(this, false, mCallback));
+        mBluetoothDeviceAddressList.add(address);
+
+        return true;
+    }
+
+    /**
+     * 切断
+     * 結果は非同期でBluetoothGattCallbackで報告される
+     */
+    public void disconnect() {
+        if (mBluetoothGattList == null) {
+            return;
+        }
+        for (BluetoothGatt gatt : mBluetoothGattList) {
+            Log.i(TAG, "gatt disconnect close b ********************************************************");
+            gatt.disconnect();
+            gatt.close();
+        }
+    }
 }
