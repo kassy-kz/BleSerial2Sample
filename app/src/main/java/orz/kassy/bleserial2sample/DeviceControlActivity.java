@@ -1,6 +1,5 @@
 package orz.kassy.bleserial2sample;
 
-import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
@@ -10,14 +9,9 @@ import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothProfile;
 import android.bluetooth.le.BluetoothLeScanner;
-import android.content.BroadcastReceiver;
-import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
-import android.content.ServiceConnection;
 import android.os.Bundle;
-import android.os.IBinder;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.MenuItem;
@@ -25,25 +19,9 @@ import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.Button;
 import android.widget.TextView;
-
 import java.util.ArrayList;
-import java.util.List;
 import java.util.UUID;
 
-/**
- * BLESerialとの接続、データ送信、受信データ表示を行う
- * GATTサーバ = BLE機器 = BLESerial
- * <p/>
- * Backボタンで終了＆前画面へ戻る
- * <p/>
- * 送信は、EditText内文字をByte[]に変換して送信
- * <p/>
- * 受信は、データを１バイトづつ表示（符号付8bit値）
- * BLESerialのデータペイロードが２０バイト／パケットなので、２０バイトを
- * 超えるデータを送ると、２０バイトづつ上書きして表示（最後のパケットしか見れない）
- *
- * @author T.Ishii
- */
 public class DeviceControlActivity extends AppCompatActivity implements OnClickListener {
     public static String UUID_BLESERIAL_SERVICE =   "bd011f22-7d3c-0db6-e441-55873d44ef40";
     public static String UUID_BLESERIAL_RX =   "2a750d7d-bd9a-928f-b744-7d5a70cef1f9";
@@ -61,6 +39,7 @@ public class DeviceControlActivity extends AppCompatActivity implements OnClickL
     private boolean mFlag = false;
     private boolean bool = false;
 
+    private BluetoothLeScanner mBluetoothLeScanner;
     private BluetoothAdapter mBluetoothAdapter;
     private ArrayList<String> mBluetoothDeviceAddressList;
     private ArrayList<BluetoothGatt> mBluetoothGattList;
